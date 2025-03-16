@@ -100,15 +100,6 @@ export default function Contact() {
             </button>
           </form>
         </div>
-
-        {/* <div>
-          <h2 className="text-xl font-semibold mb-4">Contact Information</h2>
-          <div className="space-y-4 text-gray-600">
-            <p>Email: support@video2audio.com</p>
-            <p>Address: 123 Conversion Street, Digital City, DC 12345</p>
-            <p>Phone: +1 (555) 123-4567</p>
-          </div>
-        </div> */}
       </div>
     </div>
   );
