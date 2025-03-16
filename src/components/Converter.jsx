@@ -28,10 +28,13 @@ export default function Converter() {
     }
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/convert/", {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(
+        "https://video-to-audio-converter-backend.onrender.com/api/convert/",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
