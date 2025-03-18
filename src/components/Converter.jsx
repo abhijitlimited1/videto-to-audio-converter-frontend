@@ -18,7 +18,7 @@ export default function Converter() {
     setIsConverting(true);
     setProgress(0);
     setError("");
-    setDownloadUrl(null); // Reset download URL
+    setDownloadUrl(null);
 
     const formData = new FormData();
     if (isUrlSelected) {
@@ -28,54 +28,93 @@ export default function Converter() {
     }
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5min timeout
+
       const response = await fetch(
         "https://video-to-audio-converter-backend.onrender.com/api/convert/",
         {
           method: "POST",
           body: formData,
+          signal: controller.signal,
         }
       );
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Conversion failed");
+        const errorText = await response.text();
+        try {
+          const errorData = JSON.parse(errorText);
+          throw new Error(errorData.error || "Conversion failed");
+        } catch {
+          throw new Error(errorText || "Conversion failed");
+        }
       }
 
-      // Get the blob directly from response
+      // Handle download
       const blob = await response.blob();
-      const newDownloadUrl = window.URL.createObjectURL(blob);
-      setDownloadUrl(newDownloadUrl); // Store download URL in state
+      if (blob.size === 0) {
+        throw new Error("Empty response from server");
+      }
 
-      // Auto-start download
+      const newDownloadUrl = window.URL.createObjectURL(blob);
+      setDownloadUrl(newDownloadUrl);
+
+      // Auto-download with mobile support
       const a = document.createElement("a");
+      a.style.display = "none";
       a.href = newDownloadUrl;
       a.download = `converted_${Date.now()}.mp3`;
+
+      // iOS compatibility
+      if (typeof a.download === "undefined") {
+        a.target = "_blank";
+      }
+
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(newDownloadUrl);
-      document.body.removeChild(a);
+
+      // Cleanup
+      setTimeout(() => {
+        window.URL.revokeObjectURL(newDownloadUrl);
+        document.body.removeChild(a);
+      }, 1000);
 
       setProgress(100);
     } catch (error) {
-      setError(error.message);
+      setError(
+        error.message.includes("aborted")
+          ? "Request timed out - try smaller files or different URL"
+          : error.message
+      );
     } finally {
       setIsConverting(false);
     }
   };
 
+  // Updated file validation
   const handleFileUpload = (file) => {
     const validTypes = [
       "video/mp4",
       "video/quicktime",
       "video/webm",
       "video/x-msvideo",
+      "video/mpeg",
     ];
+    const validExtensions = [".mp4", ".mov", ".avi", ".mkv", ".webm"];
     const maxSize = 500 * 1024 * 1024;
 
     setError("");
 
-    if (!validTypes.some((type) => file.type.includes(type))) {
-      setError("Invalid file type - we support MP4, MOV, AVI, and WEBM");
+    // Check both type and extension
+    const isValidType = validTypes.some((type) => file.type.includes(type));
+    const isValidExtension = validExtensions.some((ext) =>
+      file.name.toLowerCase().endsWith(ext)
+    );
+
+    if (!isValidType || !isValidExtension) {
+      setError("Unsupported file format - we accept MP4, MOV, AVI, MKV, WEBM");
       return;
     }
 
@@ -87,14 +126,38 @@ export default function Converter() {
     setFile(file);
   };
 
-  useEffect(() => {
-    return () => {
-      // Cleanup any remaining object URLs
-      if (downloadUrl) {
-        window.URL.revokeObjectURL(downloadUrl);
-      }
-    };
-  }, [downloadUrl]); // Added dependency
+  // const handleFileUpload = (file) => {
+  //   const validTypes = [
+  //     "video/mp4",
+  //     "video/quicktime",
+  //     "video/webm",
+  //     "video/x-msvideo",
+  //   ];
+  //   const maxSize = 500 * 1024 * 1024;
+
+  //   setError("");
+
+  //   if (!validTypes.some((type) => file.type.includes(type))) {
+  //     setError("Invalid file type - we support MP4, MOV, AVI, and WEBM");
+  //     return;
+  //   }
+
+  //   if (file.size > maxSize) {
+  //     setError("File size exceeds 500MB limit");
+  //     return;
+  //   }
+
+  //   setFile(file);
+  // };
+
+  // useEffect(() => {
+  //   return () => {
+  //     // Cleanup any remaining object URLs
+  //     if (downloadUrl) {
+  //       window.URL.revokeObjectURL(downloadUrl);
+  //     }
+  //   };
+  // }, [downloadUrl]); // Added dependency
 
   return (
     <div className="max-w-2xl mx-auto my-12 p-6 bg-white rounded-lg shadow-md">
