@@ -8,7 +8,7 @@ export default function Converter() {
   const [isUrlSelected, setIsUrlSelected] = useState(true);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(0);
-  const [downloadUrl, setDownloadUrl] = useState(null); // Added state for download URL
+  const [downloadUrl, setDownloadUrl] = useState(null);
 
   const isValidInput = () => url.trim() !== "" || file !== null;
 
@@ -29,7 +29,7 @@ export default function Converter() {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5min timeout
+      const timeoutId = setTimeout(() => controller.abort(), 300000);
 
       const response = await fetch(
         "https://video-to-audio-converter-backend.onrender.com/api/convert/",
@@ -52,7 +52,6 @@ export default function Converter() {
         }
       }
 
-      // Handle download
       const blob = await response.blob();
       if (blob.size === 0) {
         throw new Error("Empty response from server");
@@ -61,13 +60,11 @@ export default function Converter() {
       const newDownloadUrl = window.URL.createObjectURL(blob);
       setDownloadUrl(newDownloadUrl);
 
-      // Auto-download with mobile support
       const a = document.createElement("a");
       a.style.display = "none";
       a.href = newDownloadUrl;
       a.download = `converted_${Date.now()}.mp3`;
 
-      // iOS compatibility
       if (typeof a.download === "undefined") {
         a.target = "_blank";
       }
@@ -75,7 +72,6 @@ export default function Converter() {
       document.body.appendChild(a);
       a.click();
 
-      // Cleanup
       setTimeout(() => {
         window.URL.revokeObjectURL(newDownloadUrl);
         document.body.removeChild(a);
@@ -93,7 +89,6 @@ export default function Converter() {
     }
   };
 
-  // Updated file validation
   const handleFileUpload = (file) => {
     const validTypes = [
       "video/mp4",
@@ -107,7 +102,6 @@ export default function Converter() {
 
     setError("");
 
-    // Check both type and extension
     const isValidType = validTypes.some((type) => file.type.includes(type));
     const isValidExtension = validExtensions.some((ext) =>
       file.name.toLowerCase().endsWith(ext)
@@ -126,38 +120,13 @@ export default function Converter() {
     setFile(file);
   };
 
-  // const handleFileUpload = (file) => {
-  //   const validTypes = [
-  //     "video/mp4",
-  //     "video/quicktime",
-  //     "video/webm",
-  //     "video/x-msvideo",
-  //   ];
-  //   const maxSize = 500 * 1024 * 1024;
-
-  //   setError("");
-
-  //   if (!validTypes.some((type) => file.type.includes(type))) {
-  //     setError("Invalid file type - we support MP4, MOV, AVI, and WEBM");
-  //     return;
-  //   }
-
-  //   if (file.size > maxSize) {
-  //     setError("File size exceeds 500MB limit");
-  //     return;
-  //   }
-
-  //   setFile(file);
-  // };
-
-  // useEffect(() => {
-  //   return () => {
-  //     // Cleanup any remaining object URLs
-  //     if (downloadUrl) {
-  //       window.URL.revokeObjectURL(downloadUrl);
-  //     }
-  //   };
-  // }, [downloadUrl]); // Added dependency
+  useEffect(() => {
+    return () => {
+      if (downloadUrl) {
+        window.URL.revokeObjectURL(downloadUrl);
+      }
+    };
+  }, [downloadUrl]);
 
   return (
     <div className="max-w-2xl mx-auto my-12 p-6 bg-white rounded-lg shadow-md">
@@ -192,13 +161,18 @@ export default function Converter() {
         </div>
 
         {isUrlSelected ? (
-          <input
-            type="text"
-            placeholder="Paste YouTube or video URL here"
-            className="w-full p-3 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-          />
+          <>
+            <p className="text-sm text-gray-500 mb-2">
+              🔔 Free service: URL conversion may fail during peak hours
+            </p>
+            <input
+              type="text"
+              placeholder="Paste YouTube or video URL here"
+              className="w-full p-3 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
+          </>
         ) : (
           <div
             className="border-2 border-dashed p-8 text-center rounded-lg"
@@ -220,6 +194,7 @@ export default function Converter() {
                   className="hidden"
                   onChange={(e) => handleFileUpload(e.target.files[0])}
                   accept="video/*"
+                  capture="environment"
                   id="file-upload"
                 />
                 <label
@@ -239,7 +214,23 @@ export default function Converter() {
             animate={{ opacity: 1, y: 0 }}
             className="p-3 bg-red-100 text-red-700 rounded-lg"
           >
-            {error}
+            <div className="font-bold">{error}</div>
+            {error.includes("limit reached") && (
+              <div className="mt-2">
+                🛠️ Workaround:
+                <button
+                  onClick={() => setIsUrlSelected(false)}
+                  className="ml-2 text-blue-600 underline"
+                >
+                  Upload File Instead
+                </button>
+              </div>
+            )}
+            {error.includes("verification") && (
+              <div className="mt-2">
+                🔍 Try downloading the video first and then uploading it here
+              </div>
+            )}
           </motion.div>
         )}
 

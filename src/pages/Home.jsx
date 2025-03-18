@@ -57,7 +57,7 @@ export default function Home() {
 
           <article>
             <h2 className="text-2xl font-semibold mb-4">
-              Best YouTube to MP3 Converter 2023
+              Best YouTube to MP3 Converter 2025
             </h2>
             <p className="text-gray-600">
               Looking for the most reliable YT to MP3 converter? Our tool offers

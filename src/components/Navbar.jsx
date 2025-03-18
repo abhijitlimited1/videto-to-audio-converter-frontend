@@ -150,7 +150,7 @@ export default function Navbar() {
             Contact
           </Link>
         </div>
-        // Update the mobile menu div with these attributes
+        {/* // Update the mobile menu div with these attributes */}
         <div
           role="dialog"
           aria-modal="true"
