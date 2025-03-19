@@ -194,7 +194,6 @@ export default function Converter() {
                   className="hidden"
                   onChange={(e) => handleFileUpload(e.target.files[0])}
                   accept="video/*"
-                  capture="environment"
                   id="file-upload"
                 />
                 <label
