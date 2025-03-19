@@ -46,15 +46,30 @@ export default function Converter() {
         const errorText = await response.text();
         try {
           const errorData = JSON.parse(errorText);
-          throw new Error(errorData.error || "Conversion failed");
+          const errorMessage = errorData.error.toLowerCase();
+
+          let userMessage = errorData.error;
+          if (errorData.solution) userMessage += ` - ${errorData.solution}`;
+
+          if (
+            errorMessage.includes("url") ||
+            errorMessage.includes("youtube")
+          ) {
+            userMessage += " Try uploading the file directly instead.";
+          }
+
+          throw new Error(userMessage);
         } catch {
-          throw new Error(errorText || "Conversion failed");
+          throw new Error(
+            errorText || "Conversion failed. Try uploading the file directly."
+          );
         }
       }
 
       const blob = await response.blob();
-      if (blob.size === 0) {
-        throw new Error("Empty response from server");
+
+      if (blob.size === 0 || !blob.type.includes("audio/mpeg")) {
+        throw new Error("Invalid audio file - conversion failed");
       }
 
       const newDownloadUrl = window.URL.createObjectURL(blob);
@@ -63,10 +78,11 @@ export default function Converter() {
       const a = document.createElement("a");
       a.style.display = "none";
       a.href = newDownloadUrl;
-      a.download = `converted_${Date.now()}.mp3`;
+      a.download = `audio_${Date.now()}.mp3`;
 
       if (typeof a.download === "undefined") {
         a.target = "_blank";
+        a.rel = "noopener noreferrer";
       }
 
       document.body.appendChild(a);
@@ -75,14 +91,20 @@ export default function Converter() {
       setTimeout(() => {
         window.URL.revokeObjectURL(newDownloadUrl);
         document.body.removeChild(a);
-      }, 1000);
+      }, 3000);
 
       setProgress(100);
     } catch (error) {
+      const errorMessage = error.message.includes("aborted")
+        ? "Request timed out - try smaller files or different URL"
+        : error.message.includes("network")
+        ? "Network error - check your internet connection"
+        : error.message;
+
       setError(
-        error.message.includes("aborted")
-          ? "Request timed out - try smaller files or different URL"
-          : error.message
+        `${errorMessage} ${
+          isUrlSelected ? "Try uploading the file instead." : ""
+        }`
       );
     } finally {
       setIsConverting(false);
@@ -97,18 +119,17 @@ export default function Converter() {
       "video/x-msvideo",
       "video/mpeg",
     ];
-    const validExtensions = [".mp4", ".mov", ".avi", ".mkv", ".webm"];
     const maxSize = 500 * 1024 * 1024;
 
     setError("");
 
-    const isValidType = validTypes.some((type) => file.type.includes(type));
-    const isValidExtension = validExtensions.some((ext) =>
-      file.name.toLowerCase().endsWith(ext)
-    );
+    if (!file.type.startsWith("video/")) {
+      setError("Invalid file type - please upload video files");
+      return;
+    }
 
-    if (!isValidType || !isValidExtension) {
-      setError("Unsupported file format - we accept MP4, MOV, AVI, MKV, WEBM");
+    if (!validTypes.includes(file.type)) {
+      setError("Unsupported format: MP4, MOV, AVI, MKV, WEBM only");
       return;
     }
 
@@ -133,10 +154,7 @@ export default function Converter() {
       <div className="space-y-4">
         <div className="flex gap-4 mb-4">
           <button
-            onClick={() => {
-              setIsUrlSelected(true);
-              setFile(null);
-            }}
+            onClick={() => setIsUrlSelected(true)}
             className={`px-6 py-2 rounded font-medium transition-colors ${
               isUrlSelected
                 ? "bg-blue-600 text-white"
@@ -146,10 +164,7 @@ export default function Converter() {
             Paste URL
           </button>
           <button
-            onClick={() => {
-              setIsUrlSelected(false);
-              setUrl("");
-            }}
+            onClick={() => setIsUrlSelected(false)}
             className={`px-6 py-2 rounded font-medium transition-colors ${
               !isUrlSelected
                 ? "bg-blue-600 text-white"
@@ -163,14 +178,15 @@ export default function Converter() {
         {isUrlSelected ? (
           <>
             <p className="text-sm text-gray-500 mb-2">
-              🔔 Free service: URL conversion may fail during peak hours
+              🔔 For best results, we recommend uploading files directly
             </p>
             <input
-              type="text"
-              placeholder="Paste YouTube or video URL here"
+              type="url"
+              placeholder="Paste video URL here"
               className="w-full p-3 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
+              inputMode="url"
             />
           </>
         ) : (
@@ -179,7 +195,8 @@ export default function Converter() {
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
-              handleFileUpload(e.dataTransfer.files[0]);
+              const files = e.dataTransfer.files;
+              if (files[0]) handleFileUpload(files[0]);
             }}
           >
             {file ? (
@@ -187,12 +204,14 @@ export default function Converter() {
             ) : (
               <>
                 <p className="text-gray-600">
-                  Drop video file here or click to upload
+                  Drop video file or click to upload
                 </p>
                 <input
                   type="file"
                   className="hidden"
-                  onChange={(e) => handleFileUpload(e.target.files[0])}
+                  onChange={(e) =>
+                    e.target.files?.[0] && handleFileUpload(e.target.files[0])
+                  }
                   accept="video/*"
                   id="file-upload"
                 />
@@ -200,7 +219,7 @@ export default function Converter() {
                   htmlFor="file-upload"
                   className="cursor-pointer block mt-2 text-blue-600 hover:text-blue-800"
                 >
-                  Browse Files
+                  Select File
                 </label>
               </>
             )}
@@ -214,56 +233,41 @@ export default function Converter() {
             className="p-3 bg-red-100 text-red-700 rounded-lg"
           >
             <div className="font-bold">{error}</div>
-            {error.includes("limit reached") && (
-              <div className="mt-2">
-                🛠️ Workaround:
-                <button
-                  onClick={() => setIsUrlSelected(false)}
-                  className="ml-2 text-blue-600 underline"
-                >
-                  Upload File Instead
-                </button>
-              </div>
-            )}
-            {error.includes("verification") && (
-              <div className="mt-2">
-                🔍 Try downloading the video first and then uploading it here
-              </div>
+            {error.includes("Try uploading") && (
+              <button
+                onClick={() => setIsUrlSelected(false)}
+                className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Switch to File Upload
+              </button>
             )}
           </motion.div>
         )}
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+        <motion.button
+          onClick={handleConvert}
+          disabled={!isValidInput() || isConverting}
+          className={`w-full py-3 px-6 rounded font-semibold transition-all ${
+            isConverting
+              ? "bg-gray-400 cursor-not-allowed"
+              : isValidInput()
+              ? "bg-blue-600 hover:bg-blue-700"
+              : "bg-gray-400 cursor-not-allowed"
+          } text-white`}
         >
-          <motion.button
-            onClick={handleConvert}
-            disabled={!isValidInput() || isConverting}
-            className={`w-full py-3 px-6 rounded font-semibold transition-all ${
-              isConverting
-                ? "bg-gray-400 cursor-not-allowed"
-                : isValidInput()
-                ? "bg-blue-600 hover:bg-blue-700"
-                : "bg-gray-400 cursor-not-allowed"
-            } text-white`}
-            whileTap={{ scale: 0.95 }}
-          >
-            {isConverting ? (
-              <span className="flex items-center justify-center gap-2">
-                <motion.span
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 1 }}
-                  className="block w-5 h-5 border-2 border-white border-t-transparent rounded-full"
-                />
-                Downloading...
-              </span>
-            ) : (
-              "Download Now"
-            )}
-          </motion.button>
-        </motion.div>
+          {isConverting ? (
+            <span className="flex items-center justify-center gap-2">
+              <motion.span
+                animate={{ rotate: 360 }}
+                transition={{ repeat: Infinity, duration: 1 }}
+                className="block w-5 h-5 border-2 border-white border-t-transparent rounded-full"
+              />
+              Processing...
+            </span>
+          ) : (
+            "Convert Now"
+          )}
+        </motion.button>
 
         {isConverting && (
           <div className="w-full bg-gray-200 rounded-full h-2.5 mt-3">
